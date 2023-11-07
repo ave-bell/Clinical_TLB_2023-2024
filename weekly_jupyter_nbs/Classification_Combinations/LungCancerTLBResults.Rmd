@@ -1,0 +1,300 @@
+---
+title: "Lung Cancer TLB"
+output: pdf_document
+date: "2023-11-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(readxl)
+```
+
+
+```{r}
+median_df <- read_xlsx("median_df.xlsx") %>% 
+  select(-`...1`)
+
+
+```
+
+```{r}
+
+# Read the Excel file
+df <- read_excel("/Users/avery/OneDrive/Documents/GitHub/Clinical_TLB_2023-2024/lung_cancer_tlb.xlsx")
+
+# Replace NA values in the 'CancerType' column with 'Control'
+df$CancerType <- ifelse(is.na(df$CancerType), 'Control', df$CancerType)
+
+knitr::kable(df %>% group_by(CancerType) %>% summarize(Count = n()))
+
+
+# Read the Excel files
+adeno_sclc_1 <- read_excel("Adeno_SCLC.xlsx")
+adeno_sclc_2 <- read_excel("Adeno_SCLC_1.xlsx")
+
+# Concatenate the data frames
+adeno_sclc <- rbind(adeno_sclc_1, adeno_sclc_2)
+
+# Replace NA values in 'max_depth' and 'max_features' columns
+adeno_sclc$max_depth <- ifelse(is.na(adeno_sclc$max_depth), "None", adeno_sclc$max_depth)
+adeno_sclc$max_features <- ifelse(is.na(adeno_sclc$max_features), "None", adeno_sclc$max_features)
+
+adeno_sclc_results <- adeno_sclc %>%
+  group_by(n_estimators, max_depth, max_features) %>%
+  summarise(`Weighted Accuracy` = mean(`Weighted Accuracy`), AUC = mean(AUC)) %>% 
+  arrange(desc(`Weighted Accuracy`))
+
+# Read the Excel file
+adeno_squamous <- read_excel("Adeno_Squamous.xlsx")
+
+# Replace NA values in 'max_depth' and 'max_features' columns
+adeno_squamous$max_depth <- ifelse(is.na(adeno_squamous$max_depth), "None", adeno_squamous$max_depth)
+adeno_squamous$max_features <- ifelse(is.na(adeno_squamous$max_features), "None", adeno_squamous$max_features)
+
+# Group by 'n_estimators', 'max_depth', and 'max_features', and calculate mean
+adeno_squamous_results <- adeno_squamous %>%
+  group_by(n_estimators, max_depth, max_features) %>%
+  summarise(`Weighted Accuracy` = mean(`Weighted Accuracy`), AUC = mean(AUC)) %>% 
+  arrange(desc(`Weighted Accuracy`))
+
+# Read the Excel file
+adeno_control <- read_excel("Adeno_Control.xlsx")
+
+# Replace NA values in 'max_depth' and 'max_features' columns
+adeno_control$max_depth <- ifelse(is.na(adeno_control$max_depth), "None", adeno_control$max_depth)
+adeno_control$max_features <- ifelse(is.na(adeno_control$max_features), "None", adeno_control$max_features)
+
+# Group by 'n_estimators', 'max_depth', and 'max_features', and calculate mean
+adeno_control_results <- adeno_control %>%
+  group_by(n_estimators, max_depth, max_features) %>%
+  summarise(`Weighted Accuracy` = mean(`Weighted Accuracy`), AUC = mean(AUC)) %>% 
+  arrange(desc(`Weighted Accuracy`))
+
+# Read the Excel file
+squamous_sclc <- read_excel("Squamous_SCLC.xlsx")
+
+# Replace NA values in 'max_depth' and 'max_features' columns
+squamous_sclc$max_depth <- ifelse(is.na(squamous_sclc$max_depth), "None", squamous_sclc$max_depth)
+squamous_sclc$max_features <- ifelse(is.na(squamous_sclc$max_features), "None", squamous_sclc$max_features)
+
+# Group by 'n_estimators', 'max_depth', and 'max_features', and calculate mean
+squamous_sclc_results <- squamous_sclc %>%
+  group_by(n_estimators, max_depth, max_features) %>%
+  summarise(`Weighted Accuracy` = mean(`Weighted Accuracy`), AUC = mean(AUC)) %>% 
+  arrange(desc(`Weighted Accuracy`))
+
+          
+# Read the Excel file
+squamous_control <- read_excel("Control_Squamous.xlsx")
+
+# Replace NA values in 'max_depth' and 'max_features' columns
+squamous_control$max_depth <- ifelse(is.na(squamous_control$max_depth), "None", squamous_control$max_depth)
+squamous_control$max_features <- ifelse(is.na(squamous_control$max_features), "None", squamous_control$max_features)
+
+# Group by 'n_estimators', 'max_depth', and 'max_features', and calculate mean
+squamous_control_results <- squamous_control %>%
+  group_by(n_estimators, max_depth, max_features) %>%
+  summarise(`Weighted Accuracy` = mean(`Weighted Accuracy`), AUC = mean(AUC)) %>% 
+  arrange(desc(`Weighted Accuracy`))
+
+
+# Read the Excel file
+control_sclc <- read_excel("Control_SCLC.xlsx")
+
+# Replace NA values in 'max_depth' and 'max_features' columns
+control_sclc$max_depth <- ifelse(is.na(control_sclc$max_depth), "None", control_sclc$max_depth)
+control_sclc$max_features <- ifelse(is.na(control_sclc$max_features), "None", control_sclc$max_features)
+
+# Group by 'n_estimators', 'max_depth', and 'max_features', and calculate mean
+control_sclc_results <- control_sclc %>%
+  group_by(n_estimators, max_depth, max_features) %>%
+  summarise(`Weighted Accuracy` = mean(`Weighted Accuracy`), AUC = mean(AUC)) %>% 
+  arrange(desc(`Weighted Accuracy`))
+
+
+
+```
+
+
+
+
+
+```{r}
+# Filter the data frame to include only "Adenocarcinoma" and "SCLC" types
+graph_df <- median_df[median_df$type %in% c("Adenocarcinoma", "SCLC"), ]
+
+# Specify colors for each type
+colors <- c("Adenocarcinoma" = "blue", "SCLC" = "red")
+
+# Create the line plot
+plot <- ggplot(graph_df, aes(x = temperature, y = median, color = type)) +
+  geom_line() +
+  labs(x = "Temperature", y = "Median Specific Excess Heat Capacity") +
+  scale_color_manual(values = colors)
+
+# Create separate ribbons for each "type" with matching colors
+plot <- plot +
+  geom_ribbon(data = graph_df, aes(x = temperature, ymin = lower_q, ymax = upper_q, fill = type), alpha = 0.3) +
+  scale_fill_manual(values = colors)
+
+# Display the plot
+print(plot)
+
+```
+
+
+```{r}
+
+
+# Filter the data frame to include only "Adenocarcinoma" and "Squamous" types
+graph_df <- median_df[median_df$type %in% c("Adenocarcinoma", "Squamous"), ]
+
+# Specify colors for each type
+colors <- c("Adenocarcinoma" = "blue", "Squamous" = "red")
+
+# Create the line plot
+plot <- ggplot(graph_df, aes(x = temperature, y = median, color = type)) +
+  geom_line() +
+  labs(x = "Temperature", y = "Median Specific Excess Heat Capacity") +
+  scale_color_manual(values = colors)
+
+plot <- plot +
+  geom_ribbon(data = graph_df, aes(x = temperature, ymin = lower_q, ymax = upper_q, fill = type), alpha = 0.3) +
+  scale_fill_manual(values = colors)
+
+# Display the plot
+print(plot)
+
+```
+
+```{r}
+# Filter the data frame to include only "Adenocarcinoma" and "SCLC" types
+graph_df <- median_df[median_df$type %in% c("Adenocarcinoma", "Control"), ]
+
+# Specify colors for each type
+colors <- c("Adenocarcinoma" = "blue", "Control" = "red")
+
+# Create the line plot
+plot <- ggplot(graph_df, aes(x = temperature, y = median, color = type)) +
+  geom_line() +
+  labs(x = "Temperature", y = "Median Specific Excess Heat Capacity") +
+  scale_color_manual(values = colors)
+
+# Create separate ribbons for each "type" with matching colors
+plot <- plot +
+  geom_ribbon(data = graph_df, aes(x = temperature, ymin = lower_q, ymax = upper_q, fill = type), alpha = 0.3) +
+  scale_fill_manual(values = colors)
+
+print(plot)
+```
+
+
+```{r}
+# Filter the data frame to include only "Adenocarcinoma" and "SCLC" types
+graph_df <- median_df[median_df$type %in% c("Squamous", "SCLC"), ]
+
+# Specify colors for each type
+colors <- c("Squamous" = "blue", "SCLC" = "red")
+
+# Create the line plot
+plot <- ggplot(graph_df, aes(x = temperature, y = median, color = type)) +
+  geom_line() +
+  labs(x = "Temperature", y = "Median Specific Excess Heat Capacity") +
+  scale_color_manual(values = colors)
+
+# Create separate ribbons for each "type" with matching colors
+plot <- plot +
+  geom_ribbon(data = graph_df, aes(x = temperature, ymin = lower_q, ymax = upper_q, fill = type), alpha = 0.3) +
+  scale_fill_manual(values = colors)
+plot
+```
+
+
+
+
+
+```{r}
+# Filter the data frame to include only "Adenocarcinoma" and "SCLC" types
+graph_df <- median_df[median_df$type %in% c("Squamous", "Control"), ]
+
+# Specify colors for each type
+colors <- c("Squamous" = "blue", "Control" = "red")
+
+# Create the line plot
+plot <- ggplot(graph_df, aes(x = temperature, y = median, color = type)) +
+  geom_line() +
+  labs(x = "Temperature", y = "Median Specific Excess Heat Capacity") +
+  scale_color_manual(values = colors)
+
+# Create separate ribbons for each "type" with matching colors
+plot <- plot +
+  geom_ribbon(data = graph_df, aes(x = temperature, ymin = lower_q, ymax = upper_q, fill = type), alpha = 0.3) +
+  scale_fill_manual(values = colors)
+plot
+```
+
+
+
+
+```{r}
+# Filter the data frame to include only "Adenocarcinoma" and "SCLC" types
+graph_df <- median_df[median_df$type %in% c("Control", "SCLC"), ]
+
+# Specify colors for each type
+colors <- c("Control" = "blue", "SCLC" = "red")
+
+# Create the line plot
+plot <- ggplot(graph_df, aes(x = temperature, y = median, color = type)) +
+  geom_line() +
+  labs(x = "Temperature", y = "Median Specific Excess Heat Capacity") +
+  scale_color_manual(values = colors)
+
+# Create separate ribbons for each "type" with matching colors
+plot <- plot +
+  geom_ribbon(data = graph_df, aes(x = temperature, ymin = lower_q, ymax = upper_q, fill = type), alpha = 0.3) +
+  scale_fill_manual(values = colors)
+plot
+```
+
+
+
+
+
+```{r}
+Pairs <- c(
+  "Adeno - SCLC",
+  "Adeno - Squamous",
+  "Adeno - Control",
+  "Squamous - SCLC",
+  "Squamous - Control",
+  "Control - SCLC"
+)
+
+```
+
+
+```{r}
+dataframes_to_extract_first_row <- list(adeno_sclc_results, adeno_squamous_results, adeno_control_results, squamous_sclc_results, squamous_control_results, control_sclc_results)
+
+# Extract the first row from each dataframe
+first_rows <- lapply(dataframes_to_extract_first_row, function(df) {
+  return(df[1, ])
+})
+
+all_first_rows <- bind_rows(first_rows)
+results = cbind(Pairs, all_first_rows)
+
+colnames(results)[1]= "Pair"
+
+```
+
+\newpage
+
+```{R}
+knitr::kable(results %>% select(Pair, `Weighted Accuracy`, AUC))
+```
+
+
+
