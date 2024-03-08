@@ -12,6 +12,7 @@ Contents:
 
 5. Python_for_Data_Science: Features Python tutorials covering standard Data Science concepts.
 
+A published package related to this work can be found here: https://github.com/BuscagliaR/tlbparam
 
 
 
