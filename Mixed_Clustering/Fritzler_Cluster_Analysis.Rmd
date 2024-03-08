@@ -1,0 +1,627 @@
+---
+title: "Fritzler Clustering"
+author: "Avery Bell"
+date: "2024-02-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(clinicalDSCdata)
+library(fpc)
+library(cluster)
+library(factoextra)
+library(ClusterR)
+```
+
+# Diseases and Counts
+```{r}
+
+codes <- c('SCL', 'RAF', 'JOF', 'ERA', 'ROF', 'CCP', 'CEN', 'CHR', 'S70', 'LUF') #LUF
+
+
+cluster_df <- MixedThermograms %>%
+  filter(code %in% codes)
+
+graph_df <- cluster_df
+
+counts <- cluster_df %>% 
+  group_by(code) %>%
+  summarize(Count = n())
+
+counts$Count %>% sum() / 202
+counts$Count/9
+```
+
+
+
+# Visualize Fritzler Thermograms by Disease
+```{r}
+mixed_long <- pivot_longer(
+                           cluster_df, 
+                           cols = T45:T90,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+mixed_long <- mixed_long %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(mixed_long, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sampleID))+
+  facet_wrap( . ~ code ) 
+```
+
+### TO DO: visualize with bands
+
+# Hierarchial Clustering: Agglomerative and Divisive
+```{r}
+
+cluster_df <- MixedThermograms %>%
+  filter(code %in% codes)%>% 
+  select(c(3, T50:T83))
+
+labs <- MixedThermograms %>% 
+  filter(code %in% codes)%>% 
+  select(DiseaseGroup) 
+
+labs_1 <- as.factor(labs$DiseaseGroup)
+
+
+labs <- as.numeric(as.factor(labs$DiseaseGroup))
+
+cluster_df <- column_to_rownames(cluster_df, 'sampleID')
+
+# cluster_df_1_1 <- t(cluster_df)
+# 
+# cluster_df_1_2 <- diff(cluster_df_1_1)
+# 
+# cluster_df_1 <- as.data.frame(t(cluster_df_1_2))
+
+gower.dist <- daisy(cluster_df, metric = 'gower')
+class(gower.dist)
+
+# Using "complete" linkage - agglomerative
+agg_clust_c <- hclust(gower.dist, method = "complete")
+
+# Using "complete" linkage - divisive
+divisive_clust <- diana(as.matrix(gower.dist), 
+                        diss = TRUE, keep.diss = TRUE)
+
+
+result_df <- data.frame(k = numeric(), purity = numeric(), silhouette = numeric(), twss = numeric())
+
+for (k in 2:length(unique(labs))) {
+  
+  # Agglomerative clustering
+  clusters_agg <- cutree(agg_clust_c, k = k)
+  
+  # Divisive clustering
+  clusters_div <- cutree(divisive_clust, k = k)
+  
+  # Calculate cluster statistics for agglomerative clustering
+  cluster_stats_agg <- cluster.stats(gower.dist, clusters_agg)
+  
+  # Calculate purity for agglomerative clustering
+  purity_result_agg <- external_validation(clusters_agg, labs, method = "purity")
+  
+  # Calculate silhouette for agglomerative clustering
+  silhouette_result_agg <- cluster_stats_agg$avg.silwidth
+  
+  # Calculate TWSS for agglomerative clustering
+  twss_result_agg <- cluster_stats_agg$within.cluster.ss
+  
+  # Calculate cluster statistics for divisive clustering
+  cluster_stats_div <- cluster.stats(gower.dist, clusters_div)
+  
+  # Calculate purity for divisive clustering
+  purity_result_div <- external_validation(clusters_div, labs, method = "purity")
+  
+  # Calculate silhouette for divisive clustering
+  silhouette_result_div <- cluster_stats_div$avg.silwidth
+  
+  # Calculate TWSS for divisive clustering
+  twss_result_div <- cluster_stats_div$within.cluster.ss
+  
+  # Combine all results into a single dataframe for agglomerative clustering
+  cluster_results_agg <- data.frame(k = k, method = "agglomerative", 
+                                    purity = purity_result_agg, silhouette = silhouette_result_agg, 
+                                    twss = twss_result_agg)
+  
+  # Combine all results into a single dataframe for divisive clustering
+  cluster_results_div <- data.frame(k = k, method = "divisive", 
+                                    purity = purity_result_div, silhouette = silhouette_result_div, 
+                                    twss = twss_result_div)
+  
+  # Append the results to result_df
+  result_df <- rbind(result_df, cluster_results_agg, cluster_results_div)
+  
+}
+
+
+
+rclusters <- cutree(agg_clust_c, k = 9)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+proportions <- prop.table(contingency_table, margin = 1)
+```
+
+
+# Investigating Different Clusterings
+
+## Agglomerative, K = 5
+
+```{r}
+rclusters <- cutree(agg_clust_c, k = 4)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+```
+
+```{r}
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+
+
+## Divisive, K = 6
+
+```{r}
+rclusters <- cutree(divisive_clust, k = 6)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+```
+
+```{r}
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+
+
+```{r}
+rclusters <- cutree(agg_clust_c, k = 2)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+```
+
+
+
+```{r}
+rclusters <- cutree(divisive_clust, k = 2)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+```
+
+
+
+
+# filter out two thermograms that are dominating clusters
+```{r}
+removed_data <- clust_graph %>% 
+  filter(rclusters== 2) %>% 
+  select(sampleID)
+
+cluster_df <- MixedThermograms %>%
+  filter(sampleID != 'SCL25' & sampleID != 'S70F5') %>% 
+  filter(code %in% codes)%>% 
+  select(c(3, T50:T83))
+
+labs <- MixedThermograms %>% 
+  filter(sampleID != 'SCL25' & sampleID != 'S70F5') %>% 
+  filter(code %in% codes)%>% 
+  select(DiseaseGroup) 
+
+labs_1 <- as.factor(labs$DiseaseGroup)
+
+
+labs <- as.numeric(as.factor(labs$DiseaseGroup))
+
+cluster_df <- column_to_rownames(cluster_df, 'sampleID')
+
+# cluster_df_1_1 <- t(cluster_df)
+# 
+# cluster_df_1_2 <- diff(cluster_df_1_1)
+# 
+# cluster_df_1 <- as.data.frame(t(cluster_df_1_2))
+
+gower.dist <- daisy(cluster_df, metric = 'gower')
+class(gower.dist)
+
+# Using "complete" linkage - agglomerative
+agg_clust_c <- hclust(gower.dist, method = "complete")
+
+# Using "complete" linkage - divisive
+divisive_clust <- diana(as.matrix(gower.dist), 
+                        diss = TRUE, keep.diss = TRUE)
+
+
+result_df <- data.frame(k = numeric(), purity = numeric(), silhouette = numeric(), twss = numeric())
+
+for (k in 2:length(unique(labs))) {
+  
+  # Agglomerative clustering
+  clusters_agg <- cutree(agg_clust_c, k = k)
+  
+  # Divisive clustering
+  clusters_div <- cutree(divisive_clust, k = k)
+  
+  # Calculate cluster statistics for agglomerative clustering
+  cluster_stats_agg <- cluster.stats(gower.dist, clusters_agg)
+  
+  # Calculate purity for agglomerative clustering
+  purity_result_agg <- external_validation(clusters_agg, labs, method = "purity")
+  
+  # Calculate silhouette for agglomerative clustering
+  silhouette_result_agg <- cluster_stats_agg$avg.silwidth
+  
+  # Calculate TWSS for agglomerative clustering
+  twss_result_agg <- cluster_stats_agg$within.cluster.ss
+  
+  # Calculate cluster statistics for divisive clustering
+  cluster_stats_div <- cluster.stats(gower.dist, clusters_div)
+  
+  # Calculate purity for divisive clustering
+  purity_result_div <- external_validation(clusters_div, labs, method = "purity")
+  
+  # Calculate silhouette for divisive clustering
+  silhouette_result_div <- cluster_stats_div$avg.silwidth
+  
+  # Calculate TWSS for divisive clustering
+  twss_result_div <- cluster_stats_div$within.cluster.ss
+  
+  # Combine all results into a single dataframe for agglomerative clustering
+  cluster_results_agg <- data.frame(k = k, method = "agglomerative", 
+                                    purity = purity_result_agg, silhouette = silhouette_result_agg, 
+                                    twss = twss_result_agg)
+  
+  # Combine all results into a single dataframe for divisive clustering
+  cluster_results_div <- data.frame(k = k, method = "divisive", 
+                                    purity = purity_result_div, silhouette = silhouette_result_div, 
+                                    twss = twss_result_div)
+  
+  # Append the results to result_df
+  result_df <- rbind(result_df, cluster_results_agg, cluster_results_div)
+  
+}
+
+
+
+```
+
+
+
+
+```{r}
+groups <- 2
+rclusters <- cutree(agg_clust_c, k = groups)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+
+graph_df <- cluster_df
+
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+
+
+
+
+## View Agglomerative
+
+```{r}
+plot(agg_clust_c)
+```
+## View Divisive
+
+```{r}
+plot(divisive_clust)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Agglomerative, K = 2
+
+```{r}
+groups <- 2
+rclusters <- cutree(agg_clust_c, k = groups)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+
+cluster_df <- MixedThermograms %>%
+  filter(sampleID != 'SCL25' & sampleID != 'S70F5') %>% 
+  filter(code %in% codes)
+graph_df <- cluster_df
+```
+
+```{r}
+
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+
+
+## Divisive, K = 2
+
+```{r}
+rclusters <- cutree(divisive_clust, k = groups)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+```
+
+```{r}
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+## Agglomerative, K = 3
+
+```{r}
+groups <- 3
+rclusters <- cutree(agg_clust_c, k = groups)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+```
+
+```{r}
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+
+
+## Divisive, K = 3
+
+```{r}
+rclusters <- cutree(divisive_clust, k = groups)
+# Create a contingency table
+contingency_table <- table(Disease = labs_1, Clusters = rclusters)
+
+# Calculate proportions
+prop.table(contingency_table, margin = 1)
+```
+
+```{r}
+clust_graph <- cbind(graph_df, rclusters)
+
+clust_graph <- rownames_to_column(clust_graph, "sample_id")
+
+clust_graph_1 <- pivot_longer(
+                           clust_graph, 
+                           cols = T50:T83,
+                           names_to = "Temperatures",
+                           values_to = "DSP"
+                            )
+
+clust_graph_2 <- clust_graph_1 %>% 
+  mutate(Temperatures = as.numeric(str_remove(Temperatures, "T")))
+
+ggplot(clust_graph_2, aes(x = Temperatures))+
+  geom_line(aes(y = DSP, group = sample_id, color = code))+
+  facet_wrap( . ~ rclusters ) 
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
