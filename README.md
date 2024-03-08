@@ -1,4 +1,4 @@
-This repository contains machine learning and analysis results for thermal liquid biopsy (TLB) outcomes. The datasets encompass biochemistry results for lung cancer and a variety of diseases, including Lupus, Rheumatoid Arthritis, and others.
+This repository contains machine learning and analysis results for thermal liquid biopsy (TLB) results. The datasets encompass biochemistry results for lung cancer and a variety of diseases, including Lupus, Rheumatoid Arthritis, and others.
 
 Contents:
 
